@@ -90,6 +90,43 @@ const fallbackJobDescription = (userContent = "") => {
     return `${parts[0]}. ${parts[1] || "Contributed to measurable improvements through ownership, execution, and continuous optimization."}.`;
 };
 
+const normalizeExtractedResumeData = (rawData = {}) => {
+    const normalized = { ...rawData };
+
+    // Some model outputs use `project` instead of schema field `projects`.
+    if (!Array.isArray(normalized.projects) && Array.isArray(normalized.project)) {
+        normalized.projects = normalized.project;
+    }
+
+    delete normalized.project;
+    return normalized;
+};
+
+const fallbackResumeFromText = (resumeText = "") => {
+    const lines = resumeText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    return {
+        professional_summary: lines.slice(0, 2).join(" ").slice(0, 350),
+        skills: [],
+        personal_info: {
+            full_name: lines[0] || "",
+            profession: "",
+            email: "",
+            phone: "",
+            location: "",
+            linkedin: "",
+            website: "",
+            image: "",
+        },
+        experience: [],
+        projects: [],
+        education: [],
+    };
+};
+
 // controller for enhancing a resume's professional summary
 
 
@@ -185,9 +222,10 @@ try {
         resumeText = textResult.text;
     } finally {
         await parser.destroy();
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+        }
     }
-
-    fs.unlinkSync(file.path);
 
     if(!resumeText){
         return res.status(400).json({message: 'Could not extract text from PDF'})
@@ -242,24 +280,40 @@ try {
     }
     `;
 
-    const response = await ai.chat.completions.create({
-        model: process.env.OPENAI_MODEL,
-        messages: [
-            { role: "system", 
-                content: systemPromt },
-            
-            {
-                role: "user",
-                content: userPrompt,
-            },
-        ],
-        response_format: {type: 'json_object'}
-      })
-        const extractedData = response.choices[0].message.content;
-        const parsedData = JSON.parse(extractedData)
-        const newResume = await Resume.create({userId: userID, title, ...parsedData})
+    try {
+        const response = await createChatCompletionWithFallback(
+            [
+                {
+                    role: "system",
+                    content: systemPromt,
+                },
+                {
+                    role: "user",
+                    content: userPrompt,
+                },
+            ],
+            { response_format: { type: "json_object" } }
+        );
 
-        res.json({resumeId: newResume._id})
+        const extractedData = response.choices[0].message.content;
+        const parsedData = normalizeExtractedResumeData(JSON.parse(extractedData));
+        const newResume = await Resume.create({ userId: userID, title, ...parsedData });
+
+        return res.json({ resumeId: newResume._id });
+    } catch (error) {
+        if (error?.status === 403 || error?.status === 429) {
+            const fallbackData = fallbackResumeFromText(resumeText);
+            const newResume = await Resume.create({ userId: userID, title, ...fallbackData });
+
+            return res.status(200).json({
+                resumeId: newResume._id,
+                fallback: true,
+                message: getAIErrorMessage(error),
+            });
+        }
+
+        return res.status(400).json({ message: error.message });
+    }
    } catch (error) {
         return res.status(400).json({message: error.message})
   }

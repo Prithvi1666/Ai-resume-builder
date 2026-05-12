@@ -1,6 +1,5 @@
 import { FilePenLineIcon, LoaderCircle, LoaderCircleIcon, PencilIcon, PlusIcon, TrashIcon, UploadCloud, UploadCloudIcon, XIcon } from 'lucide-react'
 import React, { useEffect, useState, useRef } from 'react'
-import { dummyResumeData } from '../assets/assets'
 import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import api from '../configs/api'
@@ -14,7 +13,7 @@ const Dashboard = () => {
   const {user, token} = useSelector(state => state.auth)
   
   const color = ["#9333ea", "#d97706", "#dc2626", "#0284c7", "#0284c7", "#16a34a"]
-  const [allResumes, setAllResumes] = useState(dummyResumeData)
+  const [allResumes, setAllResumes] = useState([])
   const [showCreateResume, setShowCreateResume] = useState(false)
   const [showUploadResume, setShowUploadResume] = useState(false)
   const [title, setTitle] = useState('')
@@ -65,6 +64,9 @@ const Dashboard = () => {
           Authorization: token
         }
       })
+      if (data?.fallback && data?.message) {
+        toast.success(`Uploaded with fallback: ${data.message}`)
+      }
       setTitle('')
       setResume(null)
       setShowUploadResume(false)
@@ -110,7 +112,7 @@ const Dashboard = () => {
         <div className='max-w-7xl mx-auto px-4 py-8'>
 
           <p className='text-2xl font-medium mb-6 bg-gradient-to-r from-slate-600 to-slate-700 bg-clip-text text-transparent sm:hidden'>
-            Welcome, VdPop Gaming 
+            Welcome, {user?.name || 'User'}
           </p>
 
           <div className='flex gap-4'>
