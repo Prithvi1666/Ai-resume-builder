@@ -42,10 +42,9 @@ const Login = () => {
                 <p className="text-gray-500 text-sm mt-2">Please {state} to continue</p>
                 {state !== "login" && (
                     <div className="flex items-center mt-6 w-full bg-white border border-gray-300/80 h-12 rounded-full overflow-hidden pl-6 gap-2">
-                        <User2Icon size={16} color='6B7280'/>
+                        <User2Icon size={16} color='#6B7280'/>
                         <input type='text' name="name" placeholder="Name"
-                        className='border-none outline-none ring-0' value={formData.name} onChange={handleChange} required/>
-                        <input type="text" name="name" placeholder="Name" className="border-none outline-none ring-0" value={formData.name} onChange={handleChange} required />
+                        className='flex-1 h-full border-none outline-none ring-0 bg-transparent' value={formData.name} onChange={handleChange} required/>
                     </div>
                 )}
                 <div className="flex items-center w-full mt-4 bg-white border border-gray-300/80 h-12 rounded-full overflow-hidden pl-6 gap-2">
