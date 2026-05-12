@@ -38,10 +38,10 @@ const ExperienceForm = ({ data, onChange }) => {
         const prompt = `enhance this job description ${experience.description} fro the position of ${experience.position} at ${experience.company}.`
 
         try {
-            const { data } = await api.post('api/ai/enhance-job-desc', {userContent: prompt}, { headers: { Authorization: token } })
+            const { data } = await api.post('/api/ai/enhance-job-desc', {userContent: prompt}, { headers: { Authorization: token } })
             updateExperience(index, "description", data.enhancedContent)
         } catch (error) {
-            toast.error(error,message)
+            toast.error(error?.response?.data?.message || error.message || 'Failed to enhance description')
         }finally{
             setGeneratingIndex(-1)
         }
@@ -74,7 +74,7 @@ const ExperienceForm = ({ data, onChange }) => {
                         <div className='flex justify-between items-start'>
                            <h4>Experience #{index + 1}</h4>
                            <button onClick={()=> removeExperience(index)} className='text-red-500 hover:text-red-700 transition-colors'>
-                             <Trash2 size-4/>
+                             <Trash2 className='size-4'/>
                            </button>
                         </div>
                         
