@@ -10,11 +10,24 @@ const { token } = useSelector(state => state.auth)
 const [isGenerating, setIsGenerating] = useState(false)
 
 const generateSummary = async () => {
+  if (!data?.trim()) {
+    toast.error('Please write a summary first')
+    return
+  }
+
+  if (!token) {
+    toast.error('Session expired. Please login again')
+    return
+  }
+
   try {
     setIsGenerating(true)
     const prompt = `enhance my professional summary "${data}"`;
     const response = await api.post('/api/ai/enhance-pro-sum', {userContent: prompt}, {headers: { Authorization: token }})
     setResumeData(prev => ({...prev, professional_summary: response.data.enhancedContent}))
+    if (response?.data?.fallback) {
+      toast.success('Enhanced with smart fallback (AI quota reached)')
+    }
   } catch (error) {
     toast.error(error?.response?.data?.message || error.message)
   }
@@ -30,7 +43,7 @@ const generateSummary = async () => {
                 <h3 className='flex items-center gap-2 text-lg font-semibold text-gray-900'> Professinal Summary </h3>
                 <p className='text0sm text-gray-500'>Add summary for your resume here</p>
             </div>
-            <button disabled={isGenerating} onClick={generateSummary} className='flex items-center gap-2 px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded 
+            <button type='button' disabled={isGenerating} onClick={generateSummary} className='flex items-center gap-2 px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded 
              hover:bg-purple-200 transition-colors disabled:opacity-50'>
               {isGenerating ? (<Loader2 className="size-4 animate-spin"/>): (<Sparkles className='size-4'/>)}
                {isGenerating ? "Enhancing..." : "AI Enhance"} 

@@ -3,21 +3,105 @@ import ai from "../configs/ai.js";
 import { PDFParse } from "pdf-parse";
 import fs from "fs";
 
+const getModelCandidates = () => {
+    const models = [
+        process.env.OPENAI_MODEL,
+        "gemini-2.0-flash",
+        "gpt-4o-mini",
+    ].filter(Boolean);
+
+    return [...new Set(models)];
+};
+
+const createChatCompletionWithFallback = async (messages, options = {}) => {
+    const modelCandidates = getModelCandidates();
+    let lastError;
+
+    for (const model of modelCandidates) {
+        try {
+            return await ai.chat.completions.create({
+                model,
+                messages,
+                ...options,
+            });
+        } catch (error) {
+            lastError = error;
+            if (error?.status !== 403) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError;
+};
+
+const getAIErrorMessage = (error) => {
+    if (error?.status === 403) {
+        return "AI request was denied by provider (403). Check your AI key permissions/model access and try again.";
+    }
+    if (error?.status === 429) {
+        return "AI provider quota/rate limit reached (429).";
+    }
+    return error?.message || "AI request failed";
+};
+
+const extractQuotedContent = (value = "") => {
+    const match = value.match(/"([\s\S]+)"/);
+    return match?.[1]?.trim() || value.trim();
+};
+
+const normalizeSentences = (text = "") => {
+    return text
+        .replace(/\s+/g, " ")
+        .split(/[.!?]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+};
+
+const fallbackProfessionalSummary = (userContent = "") => {
+    const source = extractQuotedContent(userContent);
+    const parts = normalizeSentences(source);
+
+    if (!parts.length) {
+        return "Motivated professional with strong problem-solving ability, effective communication, and a focus on delivering measurable business impact.";
+    }
+
+    const first = parts[0];
+    const second = parts[1];
+
+    if (second) {
+        return `${first}. ${second}.`;
+    }
+
+    return `${first}. Skilled in collaboration, continuous learning, and delivering high-quality outcomes aligned with team goals.`;
+};
+
+const fallbackJobDescription = (userContent = "") => {
+    const source = userContent
+        .replace(/^enhance this job description\s*/i, "")
+        .replace(/\s*fro the position of[\s\S]*$/i, "")
+        .trim();
+    const parts = normalizeSentences(source);
+
+    if (!parts.length) {
+        return "Collaborated with cross-functional teams to deliver key initiatives, improve process efficiency, and maintain high quality standards across releases.";
+    }
+
+    return `${parts[0]}. ${parts[1] || "Contributed to measurable improvements through ownership, execution, and continuous optimization."}.`;
+};
+
 // controller for enhancing a resume's professional summary
 
 
 
 // POST: /api/ai/enhance-pro-sum
 export const enhanceProfessionalSummary = async (req, res) => {
+    const userContent = req.body?.userContent;
     try {
-        const { userContent } = req.body;
-    
     if(!userContent){
         return res.status(400).json({message: 'Missing required fields'})
     }
-      const response = await ai.chat.completions.create({
-             model: process.env.OPENAI_MODEL,
-    messages: [
+      const response = await createChatCompletionWithFallback([
         {   role: "system",
             content: "You are an expert in resume writing Your task is to enhance the professional summary of a resume. The summary should be 1-2 sentences also highlighting key skills, ezperience, and career objectives. MAke it compelling and ATS-friendly. and only return text no options or anything else." 
         },
@@ -25,13 +109,20 @@ export const enhanceProfessionalSummary = async (req, res) => {
             role: "user",
             content: userContent,
         },
-    ],
-        })
+    ])
 
         const enhancedContent = response.choices[0].message.content;
         return res.status(200).json({enhancedContent})
 } catch (error) {
-        return res.status(400).json({message: error.message})
+        if (error?.status === 403 || error?.status === 429) {
+            const enhancedContent = fallbackProfessionalSummary(userContent);
+            return res.status(200).json({
+                enhancedContent,
+                fallback: true,
+                message: getAIErrorMessage(error),
+            });
+        }
+        return res.status(400).json({message: getAIErrorMessage(error)})
     }
 }
 
@@ -39,16 +130,13 @@ export const enhanceProfessionalSummary = async (req, res) => {
 // controller for enhancing a resume's job description
 // POST: /api/ai/enhance-job-desc
 export const enhanceJobDescription = async (req, res) => {
+const userContent = req.body?.userContent;
 try {
-    const { userContent } = req.body;
-
     if(!userContent){
         return res.status(400).json({message: 'Missing required fields'})
     }
 
-    const response = await ai.chat.completions.create({
-        model: process.env.OPENAI_MODEL,
-        messages: [
+    const response = await createChatCompletionWithFallback([
             { role: "system", 
                 content: "You are an expert in resume writing. Your task is to enhance the job description of a resume.The job description should be only in 1-2 sentence also highlighting key responsibilities and achievements. USe action verbs and quantifiable results wher possible. Make it ATS-friendly. and only return text no options or anything else. "
             },
@@ -56,12 +144,19 @@ try {
                 role: "user",
                 content: userContent,
             },
-        ],
-      })
+        ])
         const enhancedContent = response.choices[0].message.content;
         return res.status(200).json({enhancedContent})
    } catch (error) {
-        return res.status(400).json({message: error.message})
+        if (error?.status === 403 || error?.status === 429) {
+            const enhancedContent = fallbackJobDescription(userContent);
+            return res.status(200).json({
+                enhancedContent,
+                fallback: true,
+                message: getAIErrorMessage(error),
+            });
+        }
+        return res.status(400).json({message: getAIErrorMessage(error)})
   }
 }
 
